@@ -1,0 +1,16 @@
+{
+  "sample_rate": 16000,
+  "duration": 2.0,
+  "n_mels": 128,
+  "fmax": 8000,
+  "n_fft": 2048,
+  "hop_length": 256,
+  "noise_mix_ratio": 0.2,
+  "img_size": [
+    224,
+    224
+  ],
+  "img_channels": 3,
+  "raw_dir_used": null,
+  "noise_dir_used": "/Users/shreshtha/Documents/Claude/Projects/Vibranix/Vibranix/data/background_noise"
+}
