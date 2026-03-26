@@ -31,7 +31,6 @@ import tensorflow as tf
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
-NOISE_SAMPLES_DIR = PROJECT_ROOT / "data" / "noise_samples"
 
 FALLBACK_PEST_DIR = PROJECT_ROOT / "data" / "pest_indicators"
 FALLBACK_BENEFICIAL_DIR = PROJECT_ROOT / "data" / "beneficial_indicators"
@@ -172,11 +171,11 @@ def main() -> None:
 
     # Ensure expected folder structure exists (even if empty)
     ensure_dir(RAW_DIR)
-    ensure_dir(NOISE_SAMPLES_DIR)
 
-    noise_dir = _first_existing_path([NOISE_SAMPLES_DIR, FALLBACK_NOISE_DIR])
-    if noise_dir is None:
-        raise FileNotFoundError("No noise directory found (expected data/noise_samples or data/background_noise).")
+    # Per requirement: ALWAYS use `data/background_noise/` for augmentation mixing.
+    noise_dir = FALLBACK_NOISE_DIR
+    if not noise_dir.exists():
+        raise FileNotFoundError("Missing `data/background_noise/` (required for noise augmentation).")
 
     insect_sources = build_insect_sources(RAW_DIR)
     if not insect_sources:
