@@ -426,9 +426,6 @@ class BackgroundPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ==========================================
-// 1. TIMELINE SCREEN (Updated with Circular Dial)
-// ==========================================
 class GrowthTimelineScreen extends StatefulWidget {
   final double value;
   final ValueChanged<double> onChanged;
@@ -444,7 +441,7 @@ class GrowthTimelineScreen extends StatefulWidget {
 }
 
 class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
-  final double _dialSize = 250.0; // The diameter of the circular track
+  final double _dialSize = 250.0;
 
   String get _growthStage {
     if (widget.value < 0.25) return "Seedling";
@@ -453,21 +450,17 @@ class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
     return "Harvest Ready";
   }
 
-  /// Calculates the drag offset to an angle, translating it into a progress value (0 to 1)
   void _calculateAngle(Offset localPosition) {
     final center = Offset(_dialSize / 2, _dialSize / 2);
     final dx = localPosition.dx - center.dx;
     final dy = localPosition.dy - center.dy;
 
-    // Flutter atan2 starts at right-middle (0 rad) -> downwards (pi/2) -> left (pi)
-    // We adjust it by -pi/2 so 0 radians starts at the top (North)
     double angle = math.atan2(dy, dx) + math.pi / 2;
 
     if (angle < 0) {
       angle += 2 * math.pi;
     }
 
-    // Convert angle to percentage 0.0 to 1.0
     double percent = angle / (2 * math.pi);
     widget.onChanged(percent.clamp(0.0, 1.0));
   }
@@ -488,7 +481,6 @@ class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Custom Paint for Circular Slider UI
                 CustomPaint(
                   size: Size(_dialSize, _dialSize),
                   painter: CircularDialPainter(
@@ -497,8 +489,6 @@ class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
                     activeColor: Colors.green[700]!,
                   ),
                 ),
-                
-                // Central Animated Icon
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 500),
                   height: _dialSize - 90,
@@ -514,8 +504,6 @@ class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
                     color: Colors.green[700],
                   ),
                 ),
-
-                // Invisible gesture interceptor layered exactly over the painted track
                 SizedBox(
                   width: _dialSize,
                   height: _dialSize,
@@ -528,8 +516,6 @@ class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
             ),
           ),
           const Spacer(),
-          
-          // Season & Stage Descriptor 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -569,14 +555,12 @@ class CircularDialPainter extends CustomPainter {
     final radius = size.width / 2 - 10;
     const strokeWidth = 14.0;
 
-    // 1. Background Arc (Unfilled season wheel)
     final bgPaint = Paint()
       ..color = trackColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
     canvas.drawCircle(center, radius, bgPaint);
 
-    // 2. Active Progress Arc (Filled season wheel from North)
     final progressPaint = Paint()
       ..color = activeColor
       ..style = PaintingStyle.stroke
@@ -584,7 +568,6 @@ class CircularDialPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final sweepAngle = 2 * math.pi * percent;
-    // -math.pi / 2 shifts start position to North (Top)
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       -math.pi / 2,
@@ -593,7 +576,6 @@ class CircularDialPainter extends CustomPainter {
       progressPaint,
     );
 
-    // 3. Thumb Dragger Handle Indicator
     final handleAngle = sweepAngle - math.pi / 2;
     final handleOffset = Offset(
       center.dx + radius * math.cos(handleAngle),
@@ -617,9 +599,6 @@ class CircularDialPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
-// ==========================================
-// 2. LISTEN SCREEN
-// ==========================================
 class ListenScreen extends StatelessWidget {
   const ListenScreen({super.key});
 
@@ -670,9 +649,6 @@ class ListenScreen extends StatelessWidget {
   }
 }
 
-// ==========================================
-// 3. MAP SCREEN
-// ==========================================
 class ColoredMarker {
   final Offset position;
   final Color color;
@@ -900,95 +876,359 @@ class _HeatmapScreenState extends State<HeatmapScreen> {
   }
 }
 
+// ==========================================
+// 💡 ADVISOR SCREEN (Matches Screenshot)
+// ==========================================
 class AdvisorScreen extends StatelessWidget {
   const AdvisorScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text(
-          'Traditional Preventative Protocols',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        // 📈 Metric Score Card matching Screenshot header
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF142414) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.withOpacity(0.2)),
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Sustainability Score', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text(
+                      'This Season +12 pts',
+                      style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                  )
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: const [
+                  Text('87', style: TextStyle(fontSize: 42, fontWeight: FontWeight.bold, color: Colors.green)),
+                  Text(' /100', style: TextStyle(color: Colors.grey, fontSize: 16)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _scoreMiniBlock(Icons.bolt, '4.2 kg', 'Chemicals Avoided'),
+                  _scoreMiniBlock(Icons.currency_rupee, '₹45K', 'Money Saved'),
+                  _scoreMiniBlock(Icons.gps_fixed, '12/15', 'Spot Treatments'),
+                ],
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Organic, low-cost recommendations derived from local elders.',
-          style: TextStyle(color: Colors.grey),
-        ),
-        const SizedBox(height: 16),
-        _buildCheckItem(
-          title: 'Buried Porous Clay-Pot Grid',
-          subtitle: 'Maintains roots with 80% less surface water evaporation.',
-          isChecked: true,
-        ),
+        const SizedBox(height: 24),
+
+        const Text('Traditional Failsafes & Spot Treatments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        _buildCheckItem(
-          title: 'Apply Neem & Chili Foliar Spray',
-          subtitle: 'Organic deterrent for chewing invasive pests.',
-          isChecked: false,
+
+        _sectionTitle("🌊 Water Conservation"),
+        _treatmentModule(
+          'Clay Pot Irrigation',
+          'Water Conservation',
+          'Porous buried pots release water directly to roots.',
+          '₹100/pot',
+          '₹2,500',
+          '15.6x ROI',
+          '94%',
+          isDark,
         ),
-        const SizedBox(height: 12),
-        _buildCheckItem(
-          title: 'Layer Rice-Husk Bio-Mulching',
-          subtitle: 'Locks in overnight thermal dew capture.',
-          isChecked: false,
+        _treatmentModule(
+          'Contour Bunding',
+          'Water Conservation',
+          'Prevents soil erosion and stores rainwater.',
+          '₹500/acre',
+          '₹12,500',
+          '12.4x ROI',
+          '88%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Mulching',
+          'Water Conservation',
+          'Keeps soil moist and reduces evaporation.',
+          '₹200/acre',
+          '₹4,500',
+          '14.5x ROI',
+          '91%',
+          isDark,
+        ),
+
+        _sectionTitle("🐛 Natural Pest Control"),
+        _treatmentModule(
+          'Neem Oil Spray',
+          'Pest Control',
+          'Natural organic pesticide used for centuries.',
+          '₹300/L',
+          '₹8,500',
+          '17.2x ROI',
+          '95%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Chili-Garlic Spray',
+          'Pest Control',
+          'Repels chewing and sucking insects without chemicals.',
+          '₹150/L',
+          '₹3,500',
+          '11.8x ROI',
+          '86%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Buttermilk Spray',
+          'Pest Control',
+          'Prevents fungal diseases organically.',
+          '₹50/L',
+          '₹1,500',
+          '10.5x ROI',
+          '82%',
+          isDark,
+        ),
+
+        _sectionTitle("🌱 Soil Fertility"),
+        _treatmentModule(
+          'Jeevamrutha',
+          'Soil Fertility',
+          'Improves soil microbes and fertility.',
+          '₹100/batch',
+          '₹6,500',
+          '18.5x ROI',
+          '93%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Vermicompost',
+          'Soil Fertility',
+          'Rich organic compost using earthworms.',
+          '₹200/bag',
+          '₹5,000',
+          '12.5x ROI',
+          '90%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Green Manure',
+          'Soil Fertility',
+          'Adds nitrogen naturally to soil.',
+          '₹400/acre',
+          '₹9,500',
+          '16.2x ROI',
+          '94%',
+          isDark,
+        ),
+
+        _sectionTitle("🌼 Crop Management"),
+        _treatmentModule(
+          'Mixed Cropping',
+          'Crop Management',
+          'Reduces pest attacks and yield risks.',
+          '₹300/acre',
+          '₹7,500',
+          '14.2x ROI',
+          '91%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Crop Rotation',
+          'Crop Management',
+          'Maintains soil health and disrupts pests.',
+          '₹0/free',
+          '₹12,500',
+          '∞ ROI',
+          '96%',
+          isDark,
+        ),
+        _treatmentModule(
+          'Trap Cropping',
+          'Crop Management',
+          'Plants that divert pests from main crop.',
+          '₹150/acre',
+          '₹4,500',
+          '13.8x ROI',
+          '88%',
+          isDark,
         ),
       ],
     );
   }
 
-  Widget _buildCheckItem({required String title, required String subtitle, required bool isChecked}) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Colors.grey, width: 0.2),
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 24, bottom: 12),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
       ),
-      child: CheckboxListTile(
-        value: isChecked,
-        activeColor: Colors.green,
-        onChanged: (val) {},
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
+    );
+  }
+
+  Widget _scoreMiniBlock(IconData icon, String value, String sub) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.black.withOpacity(0.03), borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.green, size: 20),
+            const SizedBox(height: 4),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(sub, style: const TextStyle(color: Colors.grey, fontSize: 10), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _treatmentModule(
+    String name,
+    String category,
+    String guide,
+    String cost,
+    String saves,
+    String roi,
+    String match,
+    bool isDark,
+  ) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF142414) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(child: Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+              Text(match, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text('Targets: $category', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 12),
+          Text(guide, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Cost: $cost', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+              Text('Saves $saves', style: const TextStyle(color: Colors.green, fontSize: 13)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.green.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                child: Text(roi, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)),
+              ),
+            ],
+          )
+        ],
       ),
     );
   }
 }
 
-class ProfileScreen extends StatelessWidget {
+// Converted ProfileScreen to StatefulWidget to make it locally editable without breaking external state
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _isEditing = false;
+  final TextEditingController _nameController = TextEditingController(text: 'Aarav Sharma');
+  final TextEditingController _regionController = TextEditingController(text: 'Sector 4 Watershed Coop');
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _regionController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const CircleAvatar(
-              radius: 50,
-              backgroundColor: Colors.green,
-              child: Icon(Icons.person, size: 50, color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Aarav Sharma',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            const Text(
-              'Region: Sector 4 Watershed Coop',
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.edit),
-              label: const Text('Edit Account'),
-            ),
-          ],
+        child: SingleChildScrollView( // Prevents vertical pixel overflow for text fields
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircleAvatar(
+                radius: 50,
+                backgroundColor: Colors.green,
+                child: Icon(Icons.person, size: 50, color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+              
+              if (_isEditing) ...[
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _regionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Region',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ] else ...[
+                Text(
+                  _nameController.text,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Region: ${_regionController.text}',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ],
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _isEditing = !_isEditing;
+                  });
+                },
+                icon: Icon(_isEditing ? Icons.save : Icons.edit),
+                label: Text(_isEditing ? 'Save Account' : 'Edit Account'),
+              ),
+            ],
+          ),
         ),
       ),
     );
