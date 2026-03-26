@@ -30,6 +30,15 @@ from typing import List, Tuple
 import sys
 import time
 
+# Ensure HTTPS requests (Keras weight downloads) can validate TLS.
+# Some environments need an explicit CA bundle.
+try:
+    import certifi  # type: ignore
+
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+except Exception:
+    pass
+
 # #region agent log:env_info
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LOG_PATH = PROJECT_ROOT / ".cursor" / "debug-9f3473.log"
@@ -116,9 +125,19 @@ def make_tf_dataset(paths: np.ndarray, labels: np.ndarray, batch_size: int, shuf
     labels = labels.astype("int32")
 
     def load_npy(path_bytes: tf.Tensor) -> tf.Tensor:
-        # tf.py_function passes a scalar tf.string tensor as bytes.
-        def _load(p: bytes) -> np.ndarray:
-            p_str = p.decode("utf-8")
+        # tf.py_function input is sometimes delivered as `bytes` and sometimes as
+        # a TensorFlow `EagerTensor` depending on TF/Keras versions.
+        def _load(p) -> np.ndarray:
+            if isinstance(p, (bytes, bytearray)):
+                p_str = p.decode("utf-8")
+            else:
+                # EagerTensor -> numpy() -> bytes or string.
+                p_val = p.numpy() if hasattr(p, "numpy") else p
+                if isinstance(p_val, (bytes, bytearray)):
+                    p_str = p_val.decode("utf-8")
+                else:
+                    # numpy scalar / other objects
+                    p_str = str(p_val)
             arr = np.load(p_str).astype(np.float32)
             if arr.shape != (IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
                 raise ValueError(f"Unexpected spectrogram shape: {arr.shape} for {p_str}")
@@ -161,8 +180,14 @@ def compute_class_weights(labels: List[int]) -> dict:
     labels_arr = np.array(labels, dtype=np.int32)
     counts = np.bincount(labels_arr, minlength=NUM_CLASSES)
     total = float(np.sum(counts))
-    # Inverse frequency weighting.
-    weights = {i: (total / (NUM_CLASSES * float(c) + 1e-8)) for i, c in enumerate(counts)}
+    # Inverse frequency weighting; if a class is absent from `labels`, its weight is 0.
+    # (Keras won't use that weight for samples that don't exist, and it avoids huge weights.)
+    weights: dict = {}
+    for i, c in enumerate(counts):
+        if c <= 0:
+            weights[i] = 0.0
+        else:
+            weights[i] = total / (NUM_CLASSES * float(c))
     return weights
 
 
@@ -189,12 +214,19 @@ def main() -> None:
     if len(paths) < 3:
         raise RuntimeError("Too few samples. Run preprocess.py first and ensure you have enough data.")
 
+    labels_arr = np.array(labels, dtype=np.int32)
+    counts = np.bincount(labels_arr, minlength=NUM_CLASSES)
+    present = counts[counts > 0]
+    stratify = None
+    if len(present) > 1 and int(np.min(present)) >= 2:
+        stratify = labels
+
     X_train_paths, X_val_paths, y_train, y_val = train_test_split(
         paths,
         labels,
         test_size=0.2,
         random_state=args.seed,
-        stratify=labels if len(set(labels)) > 1 else None,
+        stratify=stratify,
     )
 
     ds_train = make_tf_dataset(np.array(X_train_paths), np.array(y_train), batch_size=args.batch_size, shuffle=True, seed=args.seed)
