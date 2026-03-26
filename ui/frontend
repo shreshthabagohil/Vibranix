@@ -1,0 +1,1072 @@
+import 'package:flutter/material.dart';
+import 'dart:math' as math;
+import 'dart:async'; // Imported for the Timer
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  void _toggleTheme(bool isDark) {
+    setState(() {
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Echo-Sentinel',
+      debugShowCheckedModeBanner: false,
+      themeMode: _themeMode,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF8FBF8),
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.green,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      home: MainScreen(
+        isDarkMode: _themeMode == ThemeMode.dark,
+        onThemeChanged: _toggleTheme,
+      ),
+    );
+  }
+}
+
+// --- Dynamic Particle Modeling ---
+class Particle {
+  Offset position;
+  Offset velocity;
+  double opacity;
+  double radius;
+  final double maxAge;
+  double age = 0;
+  double rotation;
+  double rotationSpeed;
+
+  Particle({
+    required this.position,
+    required this.velocity,
+    required this.opacity,
+    required this.radius,
+    this.rotation = 0,
+    this.rotationSpeed = 0,
+    this.maxAge = 100,
+  });
+
+  bool update() {
+    position += velocity;
+    rotation += rotationSpeed;
+    age++;
+    opacity = math.max(0.0, 1.0 - (age / maxAge));
+    return age < maxAge;
+  }
+}
+
+class MainScreen extends StatefulWidget {
+  final bool isDarkMode;
+  final ValueChanged<bool> onThemeChanged;
+
+  const MainScreen({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
+  int _selectedIndex = 0;
+  bool _showSystem = false;
+
+  final List<ColoredMarker> _globalMarkedPoints = [];
+
+  // Particle Viewport State
+  final List<Particle> _particles = [];
+  Offset _cursorPosition = Offset.zero;
+  late AnimationController _particleEngine;
+  final math.Random _random = math.Random();
+
+  Timer? _restTimer;
+
+  // Lifted state for season tracking
+  double _timelineValue = 0.2;
+
+  @override
+  void initState() {
+    super.initState();
+    _particleEngine = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..addListener(_tickParticles)..repeat();
+  }
+
+  @override
+  void dispose() {
+    _particleEngine.dispose();
+    _restTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onCursorMoved(Offset newPosition) {
+    _restTimer?.cancel();
+
+    setState(() {
+      _cursorPosition = newPosition;
+    });
+
+    _restTimer = Timer(const Duration(milliseconds: 1000), () {
+      if (mounted) {
+        setState(() {
+          _cursorPosition = Offset.zero;
+        });
+      }
+    });
+  }
+
+  void _tickParticles() {
+    if (!mounted) return;
+
+    setState(() {
+      bool isSpring = _timelineValue <= 0.33;
+      bool isAutumn = _timelineValue > 0.33 && _timelineValue <= 0.66;
+      bool isWinter = _timelineValue > 0.66;
+
+      if (_cursorPosition != Offset.zero) {
+        for (int i = 0; i < 2; i++) {
+          _particles.add(
+            Particle(
+              position: _cursorPosition,
+              velocity: Offset(
+                (_random.nextDouble() - 0.5) * 4.0,
+                (_random.nextDouble() - 0.5) * 4.0,
+              ),
+              opacity: 0.8,
+              radius: (isSpring || isAutumn || isWinter) 
+                  ? _random.nextDouble() * 6.0 + 5.0 
+                  : _random.nextDouble() * 5.0 + 3.0,
+              rotation: _random.nextDouble() * math.pi * 2,
+              rotationSpeed: (_random.nextDouble() - 0.5) * 0.1,
+              maxAge: 40,
+            ),
+          );
+        }
+      }
+
+      if (_random.nextDouble() < 0.15) {
+        _particles.add(
+          Particle(
+            position: Offset(
+              _random.nextDouble() * MediaQuery.of(context).size.width,
+              MediaQuery.of(context).size.height,
+            ),
+            velocity: Offset((_random.nextDouble() - 0.5) * 1.0, -1.6),
+            opacity: 0.3,
+            radius: (isSpring || isAutumn || isWinter) 
+                ? _random.nextDouble() * 8.0 + 6.0 
+                : _random.nextDouble() * 7.0 + 4.0,
+            rotation: _random.nextDouble() * math.pi * 2,
+            rotationSpeed: (_random.nextDouble() - 0.5) * 0.05,
+            maxAge: 150,
+          ),
+        );
+      }
+
+      _particles.removeWhere((p) => !p.update());
+    });
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  Color _getSeasonalColor({
+    required Color spring,
+    required Color summer,
+    required Color autumn,
+    required Color winter,
+  }) {
+    if (_timelineValue <= 0.33) {
+      double t = _timelineValue / 0.33;
+      return Color.lerp(spring, summer, t.clamp(0.0, 1.0))!;
+    } else if (_timelineValue <= 0.66) {
+      double t = (_timelineValue - 0.33) / 0.33;
+      return Color.lerp(summer, autumn, t.clamp(0.0, 1.0))!;
+    } else {
+      double t = (_timelineValue - 0.66) / 0.34;
+      return Color.lerp(autumn, winter, t.clamp(0.0, 1.0))!;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget activeView;
+    if (_showSystem) {
+      activeView = SystemPanel(
+        onBack: () => setState(() => _showSystem = false),
+        isDarkMode: widget.isDarkMode,
+        onThemeChanged: widget.onThemeChanged,
+      );
+    } else {
+      final List<Widget> _screens = [
+        GrowthTimelineScreen(
+          value: _timelineValue,
+          onChanged: (val) => setState(() => _timelineValue = val),
+        ),
+        const ListenScreen(),
+        HeatmapScreen(userMarkedPoints: _globalMarkedPoints),
+        const AdvisorScreen(),
+        const ProfileScreen(),
+      ];
+
+      activeView = Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text(
+            'Echo-Sentinel',
+            style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+          ),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => setState(() => _showSystem = true),
+            )
+          ],
+        ),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _screens[_selectedIndex],
+            ),
+          ),
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          selectedItemColor: Colors.green[700],
+          unselectedItemColor: Colors.grey[500],
+          elevation: 8,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.timeline_rounded), label: 'Timeline'),
+            BottomNavigationBarItem(icon: Icon(Icons.graphic_eq_outlined), activeIcon: Icon(Icons.graphic_eq), label: 'Listen'),
+            BottomNavigationBarItem(icon: Icon(Icons.map_outlined), activeIcon: Icon(Icons.map), label: 'Map'),
+            BottomNavigationBarItem(icon: Icon(Icons.psychology_outlined), activeIcon: Icon(Icons.psychology), label: 'Advisor'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
+          ],
+        ),
+      );
+    }
+
+    final baseBgColor = Theme.of(context).scaffoldBackgroundColor;
+
+    final targetBgColor = _getSeasonalColor(
+      spring: const Color(0xFFFCE4EC), 
+      summer: const Color(0xFFFFF9C4), 
+      autumn: const Color(0xFFE8F5E9), 
+      winter: const Color(0xFFE1F5FE), 
+    );
+
+    final particleColor = _getSeasonalColor(
+      spring: const Color(0xFFFFF176), 
+      summer: Colors.orange,
+      autumn: const Color(0xFFD7CCC8), 
+      winter: Colors.white,
+    );
+
+    return MouseRegion(
+      onHover: (event) => _onCursorMoved(event.localPosition),
+      onExit: (_) => setState(() => _cursorPosition = Offset.zero),
+      child: Listener(
+        onPointerMove: (event) => _onCursorMoved(event.localPosition),
+        onPointerCancel: (_) => setState(() => _cursorPosition = Offset.zero),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                color: widget.isDarkMode ? baseBgColor : targetBgColor,
+              ),
+            ),
+            Positioned.fill(
+              child: CustomPaint(
+                painter: BackgroundPainter(
+                  particles: _particles,
+                  isDark: widget.isDarkMode,
+                  seasonColor: particleColor,
+                  timeline: _timelineValue,
+                ),
+              ),
+            ),
+            Positioned.fill(child: activeView),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BackgroundPainter extends CustomPainter {
+  final List<Particle> particles;
+  final bool isDark;
+  final Color seasonColor;
+  final double timeline;
+
+  BackgroundPainter({
+    required this.particles,
+    required this.isDark,
+    required this.seasonColor,
+    required this.timeline,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..style = PaintingStyle.fill;
+    bool isSpring = timeline <= 0.33;
+    bool isAutumn = timeline > 0.33 && timeline <= 0.66;
+    bool isWinter = timeline > 0.66;
+
+    for (var particle in particles) {
+      paint.color = (isDark ? Colors.lightGreenAccent : seasonColor)
+          .withOpacity(particle.opacity);
+
+      if (isSpring && !isDark) {
+        canvas.save();
+        canvas.translate(particle.position.dx, particle.position.dy);
+        canvas.rotate(particle.rotation);
+
+        paint.color = const Color(0xFFFFF176).withOpacity(particle.opacity);
+
+        for (int i = 0; i < 4; i++) {
+          canvas.save();
+          canvas.rotate(i * math.pi / 2);
+          canvas.drawOval(
+            Rect.fromCenter(
+              center: Offset(particle.radius, 0),
+              width: particle.radius * 2,
+              height: particle.radius,
+            ),
+            paint,
+          );
+          canvas.restore();
+        }
+
+        paint.color = Colors.orangeAccent.withOpacity(particle.opacity);
+        canvas.drawCircle(Offset.zero, particle.radius * 0.4, paint);
+        canvas.restore();
+      } else if (isAutumn && !isDark) {
+        canvas.save();
+        canvas.translate(particle.position.dx, particle.position.dy);
+        canvas.rotate(particle.rotation);
+
+        final leafPath = Path();
+        leafPath.moveTo(0, 0);
+        leafPath.quadraticBezierTo(particle.radius * 1.5, -particle.radius, 0, -particle.radius * 2);
+        leafPath.quadraticBezierTo(-particle.radius * 1.5, -particle.radius, 0, 0);
+        leafPath.close();
+
+        canvas.drawPath(leafPath, paint);
+        canvas.restore();
+      } else if (isWinter && !isDark) {
+        canvas.save();
+        canvas.translate(particle.position.dx, particle.position.dy);
+        canvas.rotate(particle.rotation);
+
+        final strokePaint = Paint()
+          ..color = Colors.white.withOpacity(particle.opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+
+        for (int i = 0; i < 6; i++) {
+          canvas.save();
+          canvas.rotate(i * math.pi / 3);
+          canvas.drawLine(Offset.zero, Offset(particle.radius * 1.2, 0), strokePaint);
+          
+          canvas.drawLine(Offset(particle.radius * 0.8, 0), Offset(particle.radius * 1.0, particle.radius * 0.3), strokePaint);
+          canvas.drawLine(Offset(particle.radius * 0.8, 0), Offset(particle.radius * 1.0, -particle.radius * 0.3), strokePaint);
+          canvas.restore();
+        }
+
+        canvas.restore();
+      } else {
+        canvas.drawCircle(particle.position, particle.radius, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ==========================================
+// 1. TIMELINE SCREEN (Updated with Circular Dial)
+// ==========================================
+class GrowthTimelineScreen extends StatefulWidget {
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  const GrowthTimelineScreen({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<GrowthTimelineScreen> createState() => _GrowthTimelineScreenState();
+}
+
+class _GrowthTimelineScreenState extends State<GrowthTimelineScreen> {
+  final double _dialSize = 250.0; // The diameter of the circular track
+
+  String get _growthStage {
+    if (widget.value < 0.25) return "Seedling";
+    if (widget.value < 0.5) return "Vegetative";
+    if (widget.value < 0.75) return "Flowering";
+    return "Harvest Ready";
+  }
+
+  /// Calculates the drag offset to an angle, translating it into a progress value (0 to 1)
+  void _calculateAngle(Offset localPosition) {
+    final center = Offset(_dialSize / 2, _dialSize / 2);
+    final dx = localPosition.dx - center.dx;
+    final dy = localPosition.dy - center.dy;
+
+    // Flutter atan2 starts at right-middle (0 rad) -> downwards (pi/2) -> left (pi)
+    // We adjust it by -pi/2 so 0 radians starts at the top (North)
+    double angle = math.atan2(dy, dx) + math.pi / 2;
+
+    if (angle < 0) {
+      angle += 2 * math.pi;
+    }
+
+    // Convert angle to percentage 0.0 to 1.0
+    double percent = angle / (2 * math.pi);
+    widget.onChanged(percent.clamp(0.0, 1.0));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Growth Timeline', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          const Text('Drag the circular track to visualize crop lifecycle & seasons.', style: TextStyle(color: Colors.grey)),
+          const Spacer(),
+          Center(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Custom Paint for Circular Slider UI
+                CustomPaint(
+                  size: Size(_dialSize, _dialSize),
+                  painter: CircularDialPainter(
+                    percent: widget.value,
+                    trackColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                    activeColor: Colors.green[700]!,
+                  ),
+                ),
+                
+                // Central Animated Icon
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 500),
+                  height: _dialSize - 90,
+                  width: _dialSize - 90,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[850] : Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                  ),
+                  child: Icon(
+                    widget.value < 0.5 ? Icons.eco : Icons.local_florist,
+                    size: 70 + (40 * widget.value),
+                    color: Colors.green[700],
+                  ),
+                ),
+
+                // Invisible gesture interceptor layered exactly over the painted track
+                SizedBox(
+                  width: _dialSize,
+                  height: _dialSize,
+                  child: GestureDetector(
+                    onPanUpdate: (details) => _calculateAngle(details.localPosition),
+                    onPanDown: (details) => _calculateAngle(details.localPosition),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          
+          // Season & Stage Descriptor 
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Stage: $_growthStage', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              Icon(Icons.timelapse, color: Colors.green[700]),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('🌱 Spring (North)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              Text('🍂 Autumn (South)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+}
+
+class CircularDialPainter extends CustomPainter {
+  final double percent;
+  final Color trackColor;
+  final Color activeColor;
+
+  CircularDialPainter({
+    required this.percent,
+    required this.trackColor,
+    required this.activeColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 10;
+    const strokeWidth = 14.0;
+
+    // 1. Background Arc (Unfilled season wheel)
+    final bgPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+    canvas.drawCircle(center, radius, bgPaint);
+
+    // 2. Active Progress Arc (Filled season wheel from North)
+    final progressPaint = Paint()
+      ..color = activeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final sweepAngle = 2 * math.pi * percent;
+    // -math.pi / 2 shifts start position to North (Top)
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -math.pi / 2,
+      sweepAngle,
+      false,
+      progressPaint,
+    );
+
+    // 3. Thumb Dragger Handle Indicator
+    final handleAngle = sweepAngle - math.pi / 2;
+    final handleOffset = Offset(
+      center.dx + radius * math.cos(handleAngle),
+      center.dy + radius * math.sin(handleAngle),
+    );
+
+    final handlePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final handleBorderPaint = Paint()
+      ..color = activeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.0;
+
+    canvas.drawCircle(handleOffset, 14, handlePaint);
+    canvas.drawCircle(handleOffset, 14, handleBorderPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ==========================================
+// 2. LISTEN SCREEN
+// ==========================================
+class ListenScreen extends StatelessWidget {
+  const ListenScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.mic, size: 80, color: Colors.redAccent),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Microphone Scanner Idle',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Plug in earphones to isolate pest wing-beat frequencies or interview elders for archiving oral histories.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.play_circle_fill),
+              label: const Text('Start Field Listening', style: TextStyle(fontSize: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 3. MAP SCREEN
+// ==========================================
+class ColoredMarker {
+  final Offset position;
+  final Color color;
+
+  ColoredMarker({required this.position, required this.color});
+}
+
+class HeatmapScreen extends StatefulWidget {
+  final List<ColoredMarker> userMarkedPoints;
+  const HeatmapScreen({super.key, required this.userMarkedPoints});
+
+  @override
+  State<HeatmapScreen> createState() => _HeatmapScreenState();
+}
+
+class _HeatmapScreenState extends State<HeatmapScreen> {
+  bool _showPollinators = true;
+  Offset _mapOffset = Offset.zero;
+
+  Color _selectedMarkerColor = Colors.deepPurple;
+
+  final List<Color> _markerColorOptions = [
+    Colors.deepPurple,
+    Colors.blue,
+    Colors.orange,
+    Colors.teal,
+    Colors.amber,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Drag view to scroll. Tap grid to drop pins.',
+                style: TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              const Text('Pen Color Selection:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Row(
+                children: _markerColorOptions.map((color) {
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedMarkerColor = color),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 12),
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: _selectedMarkerColor == color
+                            ? Border.all(color: isDark ? Colors.white : Colors.black, width: 2)
+                            : Border.all(color: Colors.transparent),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: _showPollinators 
+                ? (isDark ? Colors.green[900]!.withOpacity(0.3) : const Color(0xFFE8F5E9)) 
+                : (isDark ? Colors.red[900]!.withOpacity(0.3) : const Color(0xFFFFEBEE)),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _showPollinators ? Colors.green.withOpacity(0.5) : Colors.red.withOpacity(0.5),
+              ),
+            ),
+            child: GestureDetector(
+              onPanUpdate: (DragUpdateDetails details) {
+                setState(() {
+                  _mapOffset += details.delta;
+                });
+              },
+              onTapDown: (TapDownDetails details) {
+                setState(() {
+                  widget.userMarkedPoints.add(ColoredMarker(
+                    position: details.localPosition - _mapOffset,
+                    color: _selectedMarkerColor,
+                  ));
+                });
+              },
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Transform.translate(
+                    offset: _mapOffset,
+                    child: Stack(
+                      children: [
+                        _buildGridLines(isDark),
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _showPollinators ? Icons.eco_outlined : Icons.bug_report_outlined,
+                                size: 100,
+                                color: _showPollinators ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _showPollinators ? 'Pollinator Area' : 'Pest Area',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white24 : Colors.black.withOpacity(0.2)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          top: 100,
+                          left: 100,
+                          child: _buildMarker(Icons.location_on, _showPollinators ? Colors.green : Colors.red),
+                        ),
+                        Positioned(
+                          bottom: 200,
+                          right: 150,
+                          child: _buildMarker(Icons.location_on, _showPollinators ? Colors.green : Colors.red),
+                        ),
+                        ...widget.userMarkedPoints.map((marker) => Positioned(
+                              left: marker.position.dx - 15,
+                              top: marker.position.dy - 30,
+                              child: Tooltip(
+                                message: "Field Tagged",
+                                child: _buildMarker(Icons.pin_drop, marker.color),
+                              ),
+                            )),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        _buildBottomButtons(isDark),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildBottomButtons(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => setState(() => _showPollinators = true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _showPollinators ? Colors.green : (isDark ? Colors.grey[800] : Colors.white),
+                    foregroundColor: _showPollinators ? Colors.white : (isDark ? Colors.white70 : Colors.black),
+                  ),
+                  child: const Text('Pollinators Trace'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => setState(() => _showPollinators = false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: !_showPollinators ? Colors.red : (isDark ? Colors.grey[800] : Colors.white),
+                    foregroundColor: !_showPollinators ? Colors.white : (isDark ? Colors.white70 : Colors.black),
+                  ),
+                  child: const Text('Pest Invasion'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(() => _mapOffset = Offset.zero),
+                icon: const Icon(Icons.center_focus_strong, color: Colors.blue),
+                label: const Text('Center View'),
+              ),
+              if (widget.userMarkedPoints.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => setState(() => widget.userMarkedPoints.clear()),
+                  icon: const Icon(Icons.clear, color: Colors.red),
+                  label: const Text('Clear Markers', style: TextStyle(color: Colors.red)),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridLines(bool isDark) {
+    return GridView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 10,
+      ),
+      itemCount: 100,
+      itemBuilder: (context, index) => Container(
+        decoration: BoxDecoration(border: Border.all(color: isDark ? Colors.white10 : Colors.black12.withOpacity(0.04))),
+      ),
+    );
+  }
+
+  Widget _buildMarker(IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle),
+      child: Icon(icon, color: color, size: 24),
+    );
+  }
+}
+
+class AdvisorScreen extends StatelessWidget {
+  const AdvisorScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text(
+          'Traditional Preventative Protocols',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Organic, low-cost recommendations derived from local elders.',
+          style: TextStyle(color: Colors.grey),
+        ),
+        const SizedBox(height: 16),
+        _buildCheckItem(
+          title: 'Buried Porous Clay-Pot Grid',
+          subtitle: 'Maintains roots with 80% less surface water evaporation.',
+          isChecked: true,
+        ),
+        const SizedBox(height: 12),
+        _buildCheckItem(
+          title: 'Apply Neem & Chili Foliar Spray',
+          subtitle: 'Organic deterrent for chewing invasive pests.',
+          isChecked: false,
+        ),
+        const SizedBox(height: 12),
+        _buildCheckItem(
+          title: 'Layer Rice-Husk Bio-Mulching',
+          subtitle: 'Locks in overnight thermal dew capture.',
+          isChecked: false,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCheckItem({required String title, required String subtitle, required bool isChecked}) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Colors.grey, width: 0.2),
+      ),
+      child: CheckboxListTile(
+        value: isChecked,
+        activeColor: Colors.green,
+        onChanged: (val) {},
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
+      ),
+    );
+  }
+}
+
+class ProfileScreen extends StatelessWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircleAvatar(
+              radius: 50,
+              backgroundColor: Colors.green,
+              child: Icon(Icons.person, size: 50, color: Colors.white),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Aarav Sharma',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              'Region: Sector 4 Watershed Coop',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.edit),
+              label: const Text('Edit Account'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SystemPanel extends StatelessWidget {
+  final VoidCallback onBack;
+  final bool isDarkMode;
+  final ValueChanged<bool> onThemeChanged;
+
+  const SystemPanel({
+    super.key,
+    required this.onBack,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: onBack,
+        ),
+        title: const Text('Local Command & Parameters'),
+        centerTitle: true,
+        backgroundColor: Colors.transparent,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildThemeTile(),
+          const Divider(),
+          _buildSystemTile(Icons.storage_rounded, 'Archived Local Dialect Oral Histories', 'Indexing: 42 recordings'),
+          const Divider(),
+          _buildSystemTile(Icons.cloud_sync, 'Open-Meteo API Relays', 'Active Synchronization'),
+          const Divider(),
+          _buildSystemTile(Icons.security, 'Data Sovereignty Compliance', 'Decentralized local storage'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThemeTile() {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(isDarkMode ? Icons.dark_mode : Icons.light_mode),
+      ),
+      title: const Text('Interface Dark Mode', style: TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: const Text('Toggles between standard Light and High-Vis Dark Theme'),
+      trailing: Switch(
+        value: isDarkMode,
+        onChanged: onThemeChanged,
+        activeColor: Colors.green,
+      ),
+    );
+  }
+
+  Widget _buildSystemTile(IconData icon, String title, String subtitle) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13)),
+    );
+  }
+}
