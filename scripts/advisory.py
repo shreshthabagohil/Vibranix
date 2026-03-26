@@ -47,13 +47,9 @@ def _agent_log(hypothesis_id: str, location: str, message: str, data: dict) -> N
         "data": data,
         "timestamp": int(time.time() * 1000),
     }
-    try:
-        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with LOG_PATH.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
-    except OSError:
-        # Debug logging must never break the actual pipeline.
-        pass
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_PATH.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 _agent_log(
     hypothesis_id="H2_wrong_python_env",
