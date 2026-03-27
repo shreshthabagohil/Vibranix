@@ -27,85 +27,87 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from dotenv import load_dotenv
-import google.generativeai as genai
-
+from google import genai
+from google.genai import types
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 KNOWLEDGE_PATH = PROJECT_ROOT / "gemini_advisory" / "pest_knowledge.json"
 
-MODEL_NAME = "gemini-1.5-flash"
+# Preferred model order. Some accounts/APIs do not expose older v1beta model ids.
+MODEL_CANDIDATES = [
+    "gemini-2.0-flash",
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+]
 CLASS_NAMES = ["Pest", "Beneficial", "Noise"]
 EXPECTED_KEYS = ("Indian_Name", "Organic_Control", "Risk_Level")
-
 
 def _load_knowledge() -> Optional[Any]:
     if not KNOWLEDGE_PATH.exists():
         return None
     return json.loads(KNOWLEDGE_PATH.read_text(encoding="utf-8"))
 
-
 def _normalize_detection(detection: Dict[str, Any]) -> Tuple[str, float]:
-    conf = float(detection.get("confidence", detection.get("score", 0.0)) or 0.0)
-    label = detection.get("label") or detection.get("predicted_label") or detection.get("class")
-    if label is None and "class_index" in detection:
-        idx = int(detection["class_index"])
-        if 0 <= idx < len(CLASS_NAMES):
-            label = CLASS_NAMES[idx]
-    label = (str(label).strip().capitalize() if label else "Noise")
-    if label not in CLASS_NAMES:
-        label = "Noise"
+    conf = float(detection.get("confidence", 0.85))
+    label = detection.get("label", "Pest").strip().capitalize()
     return label, conf
 
-
-def _extract_json(text: str) -> Dict[str, Any]:
-    text = text.strip()
-    text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    m = re.search(r"\{.*\}", text, flags=re.S)
-    if m:
-        text = m.group(0)
-    data = json.loads(text)
-    if not isinstance(data, dict):
-        raise ValueError("Gemini returned non-object JSON.")
-    for k in EXPECTED_KEYS:
-        if k not in data:
-            raise ValueError(f"Gemini JSON missing key: {k}")
-    return {k: str(data[k]).strip() for k in EXPECTED_KEYS}
-
-
 def get_advisory(detection: Dict[str, Any]) -> Dict[str, str]:
-    load_dotenv()
-    api_key = os.environ.get("GEMINI_API_KEY")
+    # Force .env values to override any stale shell-exported vars.
+    load_dotenv(override=True)
+    api_key = os.getenv("GOOGLE_GENAI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise EnvironmentError("Missing GEMINI_API_KEY")
+        raise EnvironmentError("Missing API Key in .env")
 
+    client = genai.Client(api_key=api_key)
     label, conf = _normalize_detection(detection)
     knowledge = _load_knowledge()
 
-    prompt = "\n".join(
-        [
-            "You are an expert Indian agricultural advisor.",
-            "Return ONLY valid JSON (no markdown, no extra text).",
-            'Schema: {"Indian_Name":"...", "Organic_Control":"...", "Risk_Level":"Low|Moderate|High"}',
-            "",
-            f"Detection: class={label}, confidence={conf:.3f}",
-            "",
-            "Rules:",
-            "- If class is Pest and confidence >= 0.5: provide organic controls appropriate for Indian farms; risk is Moderate/High.",
-            "- If class is Beneficial: risk Low; advise protecting beneficial insects.",
-            "- If class is Noise OR confidence < 0.5: risk Low; advise no action.",
-            "",
-            "Local knowledge JSON (use when relevant):",
-            json.dumps(knowledge, ensure_ascii=False) if knowledge is not None else "{}",
-            "",
-            "Now output the strict JSON.",
-        ]
+    prompt = (
+        f"You are an expert Indian agricultural advisor. Provide advice for a detected '{label}' "
+        f"with {conf:.2f} confidence. Local database context: {json.dumps(knowledge)}. "
+        "Return the response in strict JSON format."
     )
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(MODEL_NAME)
-    resp = model.generate_content(
-        prompt,
-        generation_config={"temperature": 0.2, "top_p": 0.9, "response_mime_type": "application/json"},
-    )
-    return _extract_json(getattr(resp, "text", "") or str(resp))
+    last_error: Exception | None = None
+    resp = None
+    for model_name in MODEL_CANDIDATES:
+        try:
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema={
+                        "type": "OBJECT",
+                        "properties": {
+                            "Indian_Name": {"type": "STRING"},
+                            "Organic_Control": {"type": "STRING"},
+                            "Risk_Level": {"type": "STRING"}
+                        },
+                        "required": ["Indian_Name", "Organic_Control", "Risk_Level"]
+                    }
+                )
+            )
+            break
+        except Exception as e:
+            last_error = e
+            continue
 
+    if resp is None:
+        raise RuntimeError(f"No compatible Gemini model available. Last error: {last_error}")
+    
+    # Extract just the JSON part
+    return json.loads(resp.text)
+
+if __name__ == "__main__":
+    # Test it right now!
+    print("🚀 Testing Vibranix Advisory Bridge...")
+    test_data = {"label": "Locust", "confidence": 0.92}
+    try:
+        result = get_advisory(test_data)
+        print("\n✅ API Response Received:")
+        print(json.dumps(result, indent=4))
+    except Exception as e:
+        print(f"❌ Error: {e}")

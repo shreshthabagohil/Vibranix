@@ -1,0 +1,20 @@
+{
+    "Locust": {
+      "regional_names": ["Tidi", "Phadka"],
+      "threat_level": "Critical",
+      "organic_remedy": "Neem-based sprays (1500ppm), deep plowing to destroy egg pods, and using noise barriers to prevent swarming.",
+      "scientific_fact": "Desert locusts can eat their own weight in food every day, threatening food security."
+    },
+    "Armyworm": {
+      "regional_names": ["Sainik Atki", "Lashkari Ali"],
+      "threat_level": "High",
+      "organic_remedy": "Apply Metarhizium anisopliae fungus or use 5% Neem Seed Kernel Extract (NSKE) in the whorls of the plants.",
+      "scientific_fact": "They primarily attack maize and can destroy an entire field in a few nights."
+    },
+    "Honeybee": {
+      "regional_names": ["Madhumakhi"],
+      "threat_level": "None (Beneficial)",
+      "advice": "Pollinator detected. Do not use chemical pesticides. This activity is increasing your crop yield by 20-30%.",
+      "scientific_fact": "Bees are essential for the pollination of most Indian oilseeds and pulses."
+    }
+  }
